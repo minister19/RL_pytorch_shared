@@ -310,6 +310,7 @@ bazel-*
 
 # core dump files
 core.*
+!core.py
 
 # Generated if you use the pre-commit script for clang-tidy
 pr.diff
