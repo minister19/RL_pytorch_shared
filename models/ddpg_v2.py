@@ -11,8 +11,8 @@ from core import mlp
 
 
 class Actor(nn.Module):
-    def __init__(self, input_size, hidden_size=[256, 256], output_size=1):
-        super(Actor, self).__init__()
+    def __init__(self, input_size, hidden_size, output_size):
+        super().__init__()
         net_sizes = [input_size] + list(hidden_size) + [output_size]
         self.net = mlp(net_sizes, True, nn.ReLU, nn.Tanh)
 
@@ -22,10 +22,10 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, input_size, hidden_size=[256, 256]):
+    def __init__(self, input_size, hidden_size):
         super().__init__()
         net_sizes = [input_size] + list(hidden_size) + [1]
-        self.net = mlp(net_sizes, True, nn.ReLU, nn.Identity)
+        self.net = mlp(net_sizes, True, nn.ReLU, nn.Identity) # Output is Q
 
     def forward(self, s, a):
         x = torch.cat([s, a], dim=1)
