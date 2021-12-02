@@ -52,10 +52,8 @@ class Agent(object):
         self.actor_target = Actor(s_dim, 256, a_dim)
         self.critic = Critic(s_dim+a_dim, 256)
         self.critic_target = Critic(s_dim+a_dim, 256)
-        self.actor_optim = optim.Adam(
-            self.actor.parameters(), lr=self.actor_lr)
-        self.critic_optim = optim.Adam(
-            self.critic.parameters(), lr=self.critic_lr)
+        self.actor_optim = optim.Adam(self.actor.parameters(), lr=self.actor_lr)
+        self.critic_optim = optim.Adam(self.critic.parameters(), lr=self.critic_lr)
         self.buffer = []
 
         self.actor_target.load_state_dict(self.actor.state_dict())
@@ -81,8 +79,7 @@ class Agent(object):
 
         s0 = torch.tensor(np.array(s0), dtype=torch.float)
         a0 = torch.tensor(np.array(a0), dtype=torch.float)
-        r1 = torch.tensor(np.array(r1), dtype=torch.float).view(
-            self.batch_size, -1)
+        r1 = torch.tensor(np.array(r1), dtype=torch.float).view(self.batch_size, -1)
         s1 = torch.tensor(np.array(s1), dtype=torch.float)
 
         def critic_learn():
@@ -105,8 +102,7 @@ class Agent(object):
 
         def soft_update(net_target, net, tau):
             for target_param, param in zip(net_target.parameters(), net.parameters()):
-                target_param.data.copy_(
-                    target_param.data * (1.0 - tau) + param.data * tau)
+                target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
         critic_learn()
         actor_learn()
