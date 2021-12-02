@@ -29,7 +29,7 @@ class Agent(object):
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.n
 
-        hidden_size = [32, 32]
+        hidden_size = [64, 64]
         self.q_net = Actor(self.s_dim, hidden_size, self.a_dim)
 
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.lr)
@@ -64,6 +64,7 @@ class Agent(object):
             a1 = self.q_net(s1).detach()  # [batch_size, a_dim]
             a1_values, a1_indices = torch.max(a1, dim=1)  # [batch_size]
             y_true = r1 + self.gamma * (1-d) * a1_values.view(self.batch_size, -1)
+
             y_pred = self.q_net(s0).gather(dim=1, index=a0)
 
             loss_fn = nn.MSELoss()
@@ -119,7 +120,7 @@ for episode in range(1000):
         if done:
             eps_reward_sum += eps_reward
             eps_reward_avg = eps_reward_sum / (episode+1)
-            print(f'{episode}: {step} {eps_reward:.2f} {eps_reward_avg:.2f}')
+            print(f'{episode+1}: {step+1} {eps_reward:.2f} {eps_reward_avg:.2f}')
             break
 
 '''

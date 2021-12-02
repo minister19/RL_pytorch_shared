@@ -11,3 +11,5 @@
 - Please differentiate continuous actions and discrete actions. Usually agent act method should be updatd.
 - Use .detach() in to ignore gradient descent, improve efficiency.
 - Use .gather() to collect values along certain dimension with certain index.
+
+### 2021-12-02 Shawn: works on td3.

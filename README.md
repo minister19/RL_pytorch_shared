@@ -2,6 +2,9 @@
 
 Documentation and implementations for various RL models.
 
+# RL models
+![rl-models.png](./images/rl-models.png)
+
 # _env Setup
 ```
 pip install -U autopep8
@@ -13,7 +16,7 @@ pip install pyglet
 ```
 
 # Classic Envs
-## 'CartPole-v0'
+## 'CartPole-v1'
 ```
 Observation:
     Type: Box(4)
