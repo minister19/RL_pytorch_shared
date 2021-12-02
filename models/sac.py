@@ -8,7 +8,50 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.distributions.normal import Normal
 from core import mlp, Buffer
+
+
+class Actor(nn.Module):
+    def __init__(self, input_size, hidden_sizes, output_size):
+        super().__init__()
+        net_sizes = [input_size] + list(hidden_sizes)
+        self.net = mlp(net_sizes, True, nn.ReLU, nn.ReLU)
+        self.mu_layer = nn.Linear(hidden_sizes[-1], output_size)
+        self.log_std_layer = nn.Linear(hidden_sizes[-1], output_size)
+        self.LOG_STD_MAX = 2
+        self.LOG_STD_MIN = -20
+
+    def forward(self, obs, deterministic=False, with_logprob=True):
+        net_out = self.net(obs)
+        mu = self.mu_layer(net_out)
+        log_std = self.log_std_layer(net_out)
+        log_std = torch.clamp(log_std, self.LOG_STD_MIN, self.LOG_STD_MAX)
+        std = torch.exp(log_std)
+
+        # Pre-squash distribution and sample
+        pi_distribution = Normal(mu, std)
+        if deterministic:
+            # Only used for evaluating policy at test time.
+            pi_action = mu
+        else:
+            pi_action = pi_distribution.rsample()
+
+        if with_logprob:
+            # Compute logprob from Gaussian, and then apply correction for Tanh squashing.
+            # NOTE: The correction formula is a little bit magic. To get an understanding
+            # of where it comes from, check out the original SAC paper (arXiv 1801.01290)
+            # and look in appendix C. This is a more numerically-stable equivalent to Eq 21.
+            # Try deriving it yourself as a (very difficult) exercise. :)
+            logp_pi = pi_distribution.log_prob(pi_action).sum(axis=-1)
+            logp_pi -= (2*(np.log(2) - pi_action - F.softplus(-2*pi_action))).sum(axis=1)
+        else:
+            logp_pi = None
+
+        pi_action = torch.tanh(pi_action)
+        pi_action = self.act_limit * pi_action
+
+        return pi_action, logp_pi
 
 
 class Actor(nn.Module):
@@ -190,5 +233,5 @@ for episode in range(1000):
 
 '''
 Reference:
-https://spinningup.openai.com/en/latest/algorithms/td3.html
+https://spinningup.openai.com/en/latest/algorithms/sac.html
 '''
