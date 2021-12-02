@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from core import mlp
+from core import mlp, Buffer
 
 
 class Actor(nn.Module):
@@ -25,7 +25,7 @@ class Critic(nn.Module):
     def __init__(self, input_size, hidden_size):
         super().__init__()
         net_sizes = [input_size] + list(hidden_size) + [1]
-        self.net = mlp(net_sizes, True, nn.ReLU, nn.Identity)
+        self.net = mlp(net_sizes, True, nn.ReLU, nn.Identity)  # Q-learning
 
     def forward(self, s, a):
         x = torch.cat([s, a], dim=1)
@@ -33,33 +33,20 @@ class Critic(nn.Module):
         return q
 
 
-class Buffer():
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.memory = []
-        self.position = 0
-
-    def store(self, *transition):
-        if len(self.memory) < self.capacity:
-            self.memory.append(transition)  # [].pop(0) is unefficient.
-        else:
-            self.memory[self.position] = transition
-        self.position = (self.position + 1) % self.capacity
-
-
 class Agent(object):
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        s_dim = self.env.observation_space.shape[0]
-        a_dim = self.env.action_space.shape[0]
+        self.s_dim = self.env.observation_space.shape[0]
+        self.a_dim = self.env.action_space.shape[0]
 
-        hidden_size = [256, 256]
-        self.actor = Actor(s_dim, hidden_size, a_dim)
-        self.actor_target = Actor(s_dim, hidden_size, a_dim)
-        self.critic = Critic(s_dim+a_dim, hidden_size)
-        self.critic_target = Critic(s_dim+a_dim, hidden_size)
+        hidden_size = [32, 32]
+        self.actor = Actor(self.s_dim, hidden_size, self.a_dim)
+        self.actor_target = Actor(self.s_dim, hidden_size, self.a_dim)
+        self.critic = Critic(self.s_dim+self.a_dim, hidden_size)
+        self.critic_target = Critic(self.s_dim+self.a_dim, hidden_size)
+
         self.actor_optim = optim.Adam(self.actor.parameters(), lr=self.actor_lr)
         self.critic_optim = optim.Adam(self.critic.parameters(), lr=self.critic_lr)
 
@@ -91,7 +78,6 @@ class Agent(object):
             a1 = self.actor_target(s1).detach()
             # 2021-12-01 Shawn: done should be considered and learned once.
             y_true = r1 + self.gamma * (1-d) * self.critic_target(s1, a1).detach()
-
             y_pred = self.critic(s0, a0)
 
             loss_fn = nn.MSELoss()
@@ -135,7 +121,7 @@ params = {
     'critic_lr': 0.001,
     'tau': 0.02,
     'capacity': 10000,
-    'batch_size': 32,
+    'batch_size': 64,
 }
 
 agent = Agent(**params)
@@ -143,7 +129,7 @@ agent = Agent(**params)
 for episode in range(1000):
     s0 = env.reset()
     done = False
-    episode_reward = 0
+    eps_reward = 0
 
     for step in range(500):
         env.render()
@@ -151,13 +137,13 @@ for episode in range(1000):
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)  # Ensure all data stored are of type ndarray.
 
-        episode_reward += r1
+        eps_reward += r1
         s0 = s1
 
         agent.learn()
 
         if done:
-            print(episode, ': ', episode_reward)
+            print(f'{episode}: {step} {eps_reward:.2f}')
             break
 
 '''

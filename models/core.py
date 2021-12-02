@@ -24,3 +24,17 @@ def mlp(sizes, bias=True, activation=nn.ReLU, output_activation=nn.Identity):
 
 def count_vars(module):
     return sum([np.prod(p.shape) for p in module.parameters()])
+
+
+class Buffer():
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.memory = []
+        self.position = 0
+
+    def store(self, *transition):
+        if len(self.memory) < self.capacity:
+            self.memory.append(transition)  # [].pop(0) is unefficient.
+        else:
+            self.memory[self.position] = transition
+        self.position = (self.position + 1) % self.capacity
