@@ -11,9 +11,9 @@ from core import mlp, Buffer
 
 
 class Actor(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, hidden_sizes, output_size):
         super().__init__()
-        net_sizes = [input_size] + list(hidden_size) + [output_size]
+        net_sizes = [input_size] + list(hidden_sizes) + [output_size]
         self.net = mlp(net_sizes, True, nn.ReLU, nn.Identity)  # Q-learning
 
     def forward(self, s):
@@ -29,8 +29,8 @@ class Agent(object):
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.n
 
-        hidden_size = [64, 64]
-        self.q_net = Actor(self.s_dim, hidden_size, self.a_dim)
+        hidden_sizes = [64, 64]
+        self.q_net = Actor(self.s_dim, hidden_sizes, self.a_dim)
 
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.lr)
 

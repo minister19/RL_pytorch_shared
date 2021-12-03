@@ -3,9 +3,11 @@
 Documentation and implementations for various RL models.
 
 # RL models
+
 ![rl-models.png](./images/rl-models.png)
 
-# _env Setup
+# \_env Setup
+
 ```
 pip install -U autopep8
 pip install numpy
@@ -16,7 +18,9 @@ pip install pyglet
 ```
 
 # Classic Envs
-## 'CartPole-v1'
+
+## 'CartPole-v0'
+
 ```
 Observation:
     Type: Box(4)
@@ -39,4 +43,5 @@ Episode Termination:
 ```
 
 ## 'Pendulum-v1'
-*Not explained on Github.*
+
+_Not explained on Github._

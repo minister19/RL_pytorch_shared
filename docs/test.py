@@ -1,3 +1,4 @@
+import gym
 import random
 import itertools
 import numpy as np
@@ -25,3 +26,6 @@ print(x)
 
 x = np.array([1])
 print(x)
+
+env = gym.make('HalfCheetah-v2')
+print(env)
