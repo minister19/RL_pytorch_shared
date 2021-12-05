@@ -196,11 +196,12 @@ for episode in range(1000):
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)  # Ensure all data stored are of type ndarray.
 
-        eps_step += 1
         eps_reward += r1
         s0 = s1
 
         agent.learn(eps_step)
+
+        eps_step += 1
 
         if done:
             print(f'{episode+1}: {step+1} {eps_reward:.2f}')
@@ -208,6 +209,5 @@ for episode in range(1000):
 
 '''
 Reference:
-https://spinningup.openai.com/en/latest/algorithms/sac.html
-https://arxiv.org/pdf/1812.05905.pdf
+https://github.com/LxzGordon/Deep-Reinforcement-Learning-with-pytorch
 '''

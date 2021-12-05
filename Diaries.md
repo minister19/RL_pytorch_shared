@@ -27,6 +27,8 @@
 - For SAC, larger lr (learning rate) and smaller tau (target network update) seem better.
 - For SAC, init_wander is less usefull compared to TD3.
 
-### 2021-12-04 Shawn: works on SAC discrete.
+### 2021-12-05 Shawn: works on SAC discrete.
 
 - .detach() is not applicable for wrapped functions that return tuple, thus perferring "with torch.no_grad():".
+- It seems gumbel_softmax is a candidate for SAC's distribution feature.
+- It seems for discrete problems, smaller gamma is good; while for continuous problems, largger gamma is good.

@@ -1,4 +1,3 @@
-import itertools
 import gym
 import math
 import random
@@ -45,32 +44,24 @@ class Agent(object):
         hidden_sizes = [64, 64]
         self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
         self.actor_target = Actor(self.s_dim, hidden_sizes, self.a_dim)
-        self.critic1 = Critic(self.s_dim+self.a_dim, hidden_sizes)
-        self.critic1_target = Critic(self.s_dim+self.a_dim, hidden_sizes)
-        self.critic2 = Critic(self.s_dim+self.a_dim, hidden_sizes)
-        self.critic2_target = Critic(self.s_dim+self.a_dim, hidden_sizes)
+        self.critic = Critic(self.s_dim+self.a_dim, hidden_sizes)
+        self.critic_target = Critic(self.s_dim+self.a_dim, hidden_sizes)
 
         self.actor_optim = optim.Adam(self.actor.parameters(), lr=self.actor_lr)
-        self.critic_params = itertools.chain(self.critic1.parameters(), self.critic2.parameters())
-        self.critic_optim = optim.Adam(self.critic_params, lr=self.critic_lr)
+        self.critic_optim = optim.Adam(self.critic.parameters(), lr=self.critic_lr)
 
         self.actor_target.load_state_dict(self.actor.state_dict())
-        self.critic1_target.load_state_dict(self.critic1.state_dict())
-        self.critic2_target.load_state_dict(self.critic2.state_dict())
+        self.critic_target.load_state_dict(self.critic.state_dict())
 
         self.buffer = Buffer(self.capacity)
 
-    def act(self, s0, eps_step):
-        if eps_step < self.init_wander:
-            a0 = random.uniform(-self.a_dim, self.a_dim)
-            a0 = np.array([a0])
-        else:
-            s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
-            with torch.no_grad():
-                a0 = self.actor(s0).squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
+    def act(self, s0):
+        s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
+        with torch.no_grad():
+            a0 = self.actor(s0).squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
         return a0
 
-    def learn(self, eps_step):
+    def learn(self):
         if len(self.buffer.memory) < self.batch_size:
             return
 
@@ -86,39 +77,24 @@ class Agent(object):
             with torch.no_grad():
                 a2 = self.actor_target(s1)
 
-                # Target policy smoothing
-                epsilon = torch.randn_like(a2) * self.target_noise
-                epsilon = torch.clamp(epsilon, -self.noise_clip, self.noise_clip)
-                a2_noise = a2 + epsilon
-                a2_noise = torch.clamp(a2_noise, -self.a_dim, self.a_dim)
+                q_pi_targ = self.critic_target(s1, a2)
+                # 2021-12-01 Shawn: done should be considered and learned once.
+                y_true = r1 + self.gamma * (1-d) * q_pi_targ
 
-                # Target Q-values
-                q1_pi_targ = self.critic1_target(s1, a2_noise)
-                q2_pi_targ = self.critic2_target(s1, a2_noise)
-                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-                y_true = r1 + self.gamma * (1 - d) * q_pi_targ
+            q = self.critic(s0, a0)
 
-            q1 = self.critic1(s0, a0)
-            q2 = self.critic2(s0, a0)
-
-            # MSE loss against Bellman backup
             loss_fn = nn.MSELoss()
-            loss_q1 = loss_fn(q1, y_true)
-            loss_q2 = loss_fn(q2, y_true)
-            loss_q = loss_q1 + loss_q2
+            loss_q = loss_fn(q, y_true)
 
             self.critic_optim.zero_grad()
             loss_q.backward()
-            for param in self.critic_params:
+            for param in self.critic.parameters():
                 param.grad.data.clamp_(-1, 1)
             self.critic_optim.step()
 
         def actor_learn():
             pi = self.actor(s0)
-            # 2021-12-02 Shawn: Update both critic1 and critic2.
-            q1_pi = self.critic1(s0, pi)
-            q2_pi = self.critic2(s0, pi)
-            q_pi = torch.min(q1_pi, q2_pi)
+            q_pi = self.critic(s0, pi)
 
             loss_pi = -torch.mean(q_pi)
 
@@ -133,12 +109,9 @@ class Agent(object):
                 target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
         critic_learn()
-        # Delayed Policy Updates
-        if eps_step % self.policy_delay == 0:
-            actor_learn()
-            soft_update(self.critic1_target, self.critic1, self.tau)
-            soft_update(self.critic2_target, self.critic2, self.tau)
-            soft_update(self.actor_target, self.actor, self.tau)
+        actor_learn()
+        soft_update(self.critic_target, self.critic, self.tau)
+        soft_update(self.actor_target, self.actor, self.tau)
 
 
 env = gym.make('Pendulum-v1')
@@ -149,11 +122,7 @@ env = gym.make('Pendulum-v1')
 
 params = {
     'env': env,
-    'target_noise': 0.1,
-    'noise_clip': 0.2,
-    'policy_delay': 2,
-    'init_wander': 1000,
-    'gamma': 0.99,
+    'gamma': 0.5,
     'actor_lr': 0.001,
     'critic_lr': 0.001,
     'tau': 0.02,
@@ -163,29 +132,26 @@ params = {
 
 agent = Agent(**params)
 
-eps_step = 0
-
 for episode in range(1000):
     s0 = env.reset()
     eps_reward = 0
 
     for step in range(500):
         env.render()
-        a0 = agent.act(s0, eps_step)
+        a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)  # Ensure all data stored are of type ndarray.
 
-        eps_step += 1
         eps_reward += r1
         s0 = s1
 
-        agent.learn(eps_step)
+        agent.learn()
 
         if done:
             print(f'{episode+1}: {step+1} {eps_reward:.2f}')
             break
 
 '''
-Reference:
-https://spinningup.openai.com/en/latest/algorithms/td3.html
+Reference: 
+https://github.com/LxzGordon/Deep-Reinforcement-Learning-with-pytorch
 '''

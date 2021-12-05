@@ -82,7 +82,7 @@ class Agent(object):
         q_net_learn()
 
 
-env = gym.make('CartPole-v1')
+env = gym.make('CartPole-v0')
 # env.seed(0)
 # np.random.seed(0)
 # random.seed(0)
@@ -90,7 +90,7 @@ env = gym.make('CartPole-v1')
 
 params = {
     'env': env,
-    'gamma': 0.8,
+    'gamma': 0.5,
     'epsi_high': 0.9,
     'epsi_low': 0.05,
     'decay': 200,
@@ -104,7 +104,6 @@ eps_reward_sum = 0
 
 for episode in range(1000):
     s0 = env.reset()
-    done = False
     eps_reward = 0
 
     for step in range(500):

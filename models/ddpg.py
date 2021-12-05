@@ -134,7 +134,6 @@ agent = Agent(**params)
 
 for episode in range(1000):
     s0 = env.reset()
-    done = False
     eps_reward = 0
 
     for step in range(500):
