@@ -44,7 +44,8 @@ class Agent(object):
             a0 = random.randrange(self.a_dim)
         else:
             s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)
-            a0 = self.q_net(s0).detach()
+            with torch.no_grad():
+                a0 = self.q_net(s0)
             a0 = torch.argmax(a0).item()
         return a0  # torch.long
 
@@ -61,17 +62,19 @@ class Agent(object):
         d = torch.tensor(np.array(d), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
 
         def q_net_learn():
-            a1 = self.q_net(s1).detach()  # [batch_size, a_dim]
-            a1_values, a1_indices = torch.max(a1, dim=1)  # [batch_size]
-            y_true = r1 + self.gamma * (1-d) * a1_values.view(self.batch_size, -1)
+            with torch.no_grad():
+                a2 = self.q_net(s1)  # [batch_size, a_dim]
 
-            y_pred = self.q_net(s0).gather(dim=1, index=a0)
+                a2_values, a2_indices = torch.max(a2, dim=1)  # [batch_size]
+                y = r1 + self.gamma * (1-d) * a2_values.view(self.batch_size, -1)
+
+            q = self.q_net(s0).gather(dim=1, index=a0)
 
             loss_fn = nn.MSELoss()
-            loss = loss_fn(y_pred, y_true)
+            loss_q = loss_fn(q, y)
 
             self.optimizer.zero_grad()
-            loss.backward()
+            loss_q.backward()
             for param in self.q_net.parameters():
                 param.grad.data.clamp_(-1, 1)
             self.optimizer.step()
@@ -79,15 +82,15 @@ class Agent(object):
         q_net_learn()
 
 
-np.random.seed(0)
-random.seed(0)
-torch.manual_seed(0)
-
-env = gym.make('CartPole-v1')
+env = gym.make('CartPole-v0')
+# env.seed(0)
+# np.random.seed(0)
+# random.seed(0)
+# torch.manual_seed(0)
 
 params = {
     'env': env,
-    'gamma': 0.8,
+    'gamma': 0.5,
     'epsi_high': 0.9,
     'epsi_low': 0.05,
     'decay': 200,
@@ -101,7 +104,6 @@ eps_reward_sum = 0
 
 for episode in range(1000):
     s0 = env.reset()
-    done = False
     eps_reward = 0
 
     for step in range(500):

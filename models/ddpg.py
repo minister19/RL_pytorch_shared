@@ -57,7 +57,8 @@ class Agent(object):
 
     def act(self, s0):
         s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
-        a0 = self.actor(s0).squeeze(0).detach().numpy()  # Tensor -> ndarray: [a_dim]
+        with torch.no_grad():
+            a0 = self.actor(s0).squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
         return a0
 
     def learn(self):
@@ -65,9 +66,7 @@ class Agent(object):
             return
 
         samples = random.sample(self.buffer.memory, self.batch_size)
-
         s0, a0, r1, s1, d = zip(*samples)
-
         s0 = torch.tensor(np.array(s0), dtype=torch.float)  # [batch_size, s_dim]
         a0 = torch.tensor(np.array(a0), dtype=torch.float)  # [batch_size, a_dim]
         r1 = torch.tensor(np.array(r1), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
@@ -75,29 +74,32 @@ class Agent(object):
         d = torch.tensor(np.array(d), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
 
         def critic_learn():
-            a1 = self.actor_target(s1).detach()
-            q_targ = self.critic_target(s1, a1).detach()
-            # 2021-12-01 Shawn: done should be considered and learned once.
-            y_true = r1 + self.gamma * (1-d) * q_targ
+            with torch.no_grad():
+                a2 = self.actor_target(s1)
 
-            y_pred = self.critic(s0, a0)
+                q_pi_targ = self.critic_target(s1, a2)
+                # 2021-12-01 Shawn: done should be considered and learned once.
+                y_true = r1 + self.gamma * (1-d) * q_pi_targ
+
+            q = self.critic(s0, a0)
 
             loss_fn = nn.MSELoss()
-            loss = loss_fn(y_pred, y_true)
+            loss_q = loss_fn(q, y_true)
 
             self.critic_optim.zero_grad()
-            loss.backward()
+            loss_q.backward()
             for param in self.critic.parameters():
                 param.grad.data.clamp_(-1, 1)
             self.critic_optim.step()
 
         def actor_learn():
-            a_pred = self.actor(s0)
-            q_pred = self.critic(s0, a_pred)
-            loss = -torch.mean(q_pred)
+            pi = self.actor(s0)
+            q_pi = self.critic(s0, pi)
+
+            loss_pi = -torch.mean(q_pi)
 
             self.actor_optim.zero_grad()
-            loss.backward()
+            loss_pi.backward()
             for param in self.actor.parameters():
                 param.grad.data.clamp_(-1, 1)
             self.actor_optim.step()
@@ -112,13 +114,11 @@ class Agent(object):
         soft_update(self.actor_target, self.actor, self.tau)
 
 
-np.random.seed(0)
-random.seed(0)
-torch.manual_seed(0)
-
 env = gym.make('Pendulum-v1')
-env.reset()
-env.render()
+# env.seed(0)
+# np.random.seed(0)
+# random.seed(0)
+# torch.manual_seed(0)
 
 params = {
     'env': env,
@@ -134,7 +134,6 @@ agent = Agent(**params)
 
 for episode in range(1000):
     s0 = env.reset()
-    done = False
     eps_reward = 0
 
     for step in range(500):
@@ -155,6 +154,5 @@ for episode in range(1000):
 '''
 Reference: 
 https://spinningup.openai.com/en/latest/algorithms/ddpg.html
-https://blog.csdn.net/qq_41871826/article/details/108540108
 https://zhuanlan.zhihu.com/p/65931777
 '''

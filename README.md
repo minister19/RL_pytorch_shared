@@ -2,6 +2,12 @@
 
 Documentation and implementations for various RL models.
 
+# TODO
+
+1. Double DQN (https://blog.csdn.net/qq_41871826/article/details/108263919)
+2. Dueling DQN
+3. Prioritized Experience Replay
+
 # RL models
 
 ![rl-models.png](./images/rl-models.png)
