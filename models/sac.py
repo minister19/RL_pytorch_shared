@@ -113,17 +113,16 @@ class Agent(object):
         d = torch.tensor(np.array(d), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
 
         def critic_learn():
-            with torch.no_grad():
-                a2, logp_a2 = self.actor(s1)
-                logp_a2_v2 = logp_a2.view(self.batch_size, -1)
-
-                q1_pi_targ = self.critic1_target(s1, a2)
-                q2_pi_targ = self.critic2_target(s1, a2)
-                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-                y_true = r1 + self.gamma * (1 - d) * (q_pi_targ - self.alpha * logp_a2_v2)
-
             q1 = self.critic1(s0, a0)
             q2 = self.critic2(s0, a0)
+
+            with torch.no_grad():
+                a1, logp_a1 = self.actor(s1)
+                logp_a1_viewed = logp_a1.view(self.batch_size, -1)
+                q1_pi_targ = self.critic1_target(s1, a1)
+                q2_pi_targ = self.critic2_target(s1, a1)
+                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                y_true = r1 + self.gamma * (1 - d) * (q_pi_targ - self.alpha * logp_a1_viewed)
 
             # MSE loss against Bellman backup
             loss_fn = nn.MSELoss()

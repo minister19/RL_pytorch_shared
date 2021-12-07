@@ -83,23 +83,23 @@ class Agent(object):
         d = torch.tensor(np.array(d), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
 
         def critic_learn():
-            with torch.no_grad():
-                a2 = self.actor_target(s1)
-
-                # Target policy smoothing
-                epsilon = torch.randn_like(a2) * self.target_noise
-                epsilon = torch.clamp(epsilon, -self.noise_clip, self.noise_clip)
-                a2_noise = a2 + epsilon
-                a2_noise = torch.clamp(a2_noise, -self.a_dim, self.a_dim)
-
-                # Target Q-values
-                q1_pi_targ = self.critic1_target(s1, a2_noise)
-                q2_pi_targ = self.critic2_target(s1, a2_noise)
-                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-                y_true = r1 + self.gamma * (1 - d) * q_pi_targ
-
             q1 = self.critic1(s0, a0)
             q2 = self.critic2(s0, a0)
+
+            with torch.no_grad():
+                a1 = self.actor_target(s1)
+
+                # Target policy smoothing
+                epsilon = torch.randn_like(a1) * self.target_noise
+                epsilon = torch.clamp(epsilon, -self.noise_clip, self.noise_clip)
+                a1_noise = a1 + epsilon
+                a1_noise = torch.clamp(a1_noise, -self.a_dim, self.a_dim)
+
+                # Target Q-values
+                q1_pi_targ = self.critic1_target(s1, a1_noise)
+                q2_pi_targ = self.critic2_target(s1, a1_noise)
+                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                y_true = r1 + self.gamma * (1 - d) * q_pi_targ
 
             # MSE loss against Bellman backup
             loss_fn = nn.MSELoss()

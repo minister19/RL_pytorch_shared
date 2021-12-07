@@ -74,14 +74,12 @@ class Agent(object):
         d = torch.tensor(np.array(d), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
 
         def critic_learn():
-            with torch.no_grad():
-                a2 = self.actor_target(s1)
-
-                q_pi_targ = self.critic_target(s1, a2)
-                # 2021-12-01 Shawn: done should be considered and learned once.
-                y_true = r1 + self.gamma * (1-d) * q_pi_targ
-
             q = self.critic(s0, a0)
+
+            with torch.no_grad():
+                a1 = self.actor_target(s1)
+                q_pi_targ = self.critic_target(s1, a1)
+                y_true = r1 + self.gamma * (1-d) * q_pi_targ
 
             loss_fn = nn.MSELoss()
             loss_q = loss_fn(q, y_true)
