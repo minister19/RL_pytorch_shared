@@ -41,7 +41,7 @@
 ### 2021-12-07 Shawn: works on DDPG discrete.
 
 - Use .gumbel_softmax(logits, hard=True) as candidate for .argmax() + .scatter(). One-hot encoding is required, but .scatter() is undifferentiable.
-- For all discrete models, add one-hot data to .actor_learn() to avoid local optima.
+- For all discrete models, add one-hot data to .actor_learn() to avoid local optima if necessary.
 - It seems for discrete problems, random action is good for exploration.
 
 ### 2021-12-08 Shawn: works on TD3 discrete.
