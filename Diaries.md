@@ -7,7 +7,7 @@
 ### 2021-12-01 Shawn: works on DDPG.
 
 - For Q-learning, remember output_activation should be Identity. Though you can process the value afterwards, do not introduce other activation function.
-- done should be considered and learned once.
+- For all models, done should be considered and learned once.
 
 ### 2021-12-02 Shawn: works on DQN.
 
@@ -40,6 +40,9 @@
 
 ### 2021-12-07 Shawn: works on DDPG discrete.
 
-- Use .gumbel_softmax(logits, hard=True) as candidate for .argmax() + .scatter(), i.e. one-hot encoding. Because .scatter() is not differentiable.
-- Add one-hot data to actor_learn to avoid local optima.
+- Use .gumbel_softmax(logits, hard=True) as candidate for .argmax() + .scatter(). One-hot encoding is required, but .scatter() is undifferentiable.
+- For all discrete models, add one-hot data to .actor_learn() to avoid local optima.
 - It seems for discrete problems, random action is good for exploration.
+
+### 2021-12-08 Shawn: works on TD3 discrete.
+### 2021-12-09 Shawn: works on SAC discrete.

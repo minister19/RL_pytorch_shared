@@ -108,10 +108,9 @@ class Agent(object):
             pi = self.actor(s0)
             logits = F.log_softmax(pi, dim=1)
             differentiable_pi = F.gumbel_softmax(logits, hard=True)
-            # 2021-12-07 Shawn: Add one-hot data to actor_learn to avoid local optima.
             index = torch.argmax(pi, dim=1, keepdim=True)
             pi_one_hot = torch.zeros_like(pi).scatter_(1, index, 1)  # [batch_size, a_dim]
-            q_pi = self.critic(s0, (differentiable_pi + pi_one_hot)/2)
+            q_pi = self.critic(s0, (differentiable_pi + pi_one_hot)/2)  # avoid local optima.
 
             loss_pi = -torch.mean(q_pi)
 
@@ -161,7 +160,7 @@ for episode in range(1000):
         a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
         r2 = -1 * (abs(s1[0])/2.4 + abs(s1[2])/0.209)
-        agent.buffer.store(s0, a0, r2, s1, done)  # Ensure all data stored are of type ndarray.
+        agent.buffer.store(s0, a0, r2, s1, done)
 
         eps_reward += r2
         s0 = s1

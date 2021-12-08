@@ -193,7 +193,7 @@ for episode in range(1000):
         env.render()
         a0 = agent.act(s0, eps_step)
         s1, r1, done, _ = env.step(a0)
-        agent.buffer.store(s0, a0, r1, s1, done)  # Ensure all data stored are of type ndarray.
+        agent.buffer.store(s0, a0, r1, s1, done)
 
         eps_step += 1
         eps_reward += r1
