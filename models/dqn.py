@@ -62,13 +62,12 @@ class Agent(object):
         d = torch.tensor(np.array(d), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
 
         def q_net_learn():
-            with torch.no_grad():
-                a2 = self.q_net(s1)  # [batch_size, a_dim]
-
-                a2_values, a2_indices = torch.max(a2, dim=1)  # [batch_size]
-                y = r1 + self.gamma * (1-d) * a2_values.view(self.batch_size, -1)
-
             q = self.q_net(s0).gather(dim=1, index=a0)
+
+            with torch.no_grad():
+                a1 = self.q_net(s1)  # [batch_size, a_dim]
+                a1_values, a1_indices = torch.max(a1, dim=1, keepdim=True)  # [batch_size]
+                y = r1 + self.gamma * (1-d) * a1_values
 
             loss_fn = nn.MSELoss()
             loss_q = loss_fn(q, y)

@@ -39,9 +39,9 @@ class Agent(object):
             setattr(self, key, value)
 
         self.s_dim = self.env.observation_space.shape[0]
-        self.a_dim = self.env.action_space.shape[0]
+        self.a_dim = self.env.action_space.n
 
-        hidden_sizes = [64, 64]
+        hidden_sizes = [32, 32]
         self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
         self.actor_target = Actor(self.s_dim, hidden_sizes, self.a_dim)
         self.critic = Critic(self.s_dim+self.a_dim, hidden_sizes)
@@ -54,11 +54,18 @@ class Agent(object):
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         self.buffer = Buffer(self.capacity)
+        self.steps = 0
 
     def act(self, s0):
-        s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
-        with torch.no_grad():
-            a0 = self.actor(s0).squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
+        self.steps += 1
+        epsi = self.epsi_low + (self.epsi_high-self.epsi_low) * (math.exp(-1.0 * self.steps/self.decay))
+        if random.random() < epsi:
+            a0 = random.randrange(self.a_dim)
+        else:
+            s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
+            with torch.no_grad():
+                a0 = self.actor(s0)
+            a0 = torch.argmax(a0).item()
         return a0
 
     def learn(self):
@@ -68,20 +75,25 @@ class Agent(object):
         samples = random.sample(self.buffer.memory, self.batch_size)
         s0, a0, r1, s1, d = zip(*samples)
         s0 = torch.tensor(np.array(s0), dtype=torch.float)  # [batch_size, s_dim]
-        a0 = torch.tensor(np.array(a0), dtype=torch.float)  # [batch_size, a_dim]
+        a0 = torch.tensor(np.array(a0), dtype=torch.long).view(self.batch_size, -1)  # [batch_size, 1]
+        a0_one_hot = torch.zeros(self.batch_size, self.a_dim).scatter_(1, a0, 1)  # [batch_size, a_dim]
         r1 = torch.tensor(np.array(r1), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
         s1 = torch.tensor(np.array(s1), dtype=torch.float)  # [batch_size, s_dim]
         d = torch.tensor(np.array(d), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
 
         def critic_learn():
+            q = self.critic(s0, a0_one_hot)
+
             with torch.no_grad():
-                a2 = self.actor_target(s1)
+                a1 = self.actor_target(s1)
 
-                q_pi_targ = self.critic_target(s1, a2)
-                # 2021-12-01 Shawn: done should be considered and learned once.
-                y_true = r1 + self.gamma * (1-d) * q_pi_targ
+                a1_values, a1_indices = torch.max(a1, dim=1, keepdim=True)  # [batch_size, a_dim]
+                a1_one_hot = torch.zeros_like(a1).scatter_(1, a1_indices, 1)
 
-            q = self.critic(s0, a0)
+                q_pi_targ = self.critic_target(s1, a1_one_hot)
+                y_true = torch.zeros_like(q)
+                for i in range(self.batch_size):
+                    y_true[i] = r1[i] + self.gamma * (1-d[i]) * q_pi_targ[i]
 
             loss_fn = nn.MSELoss()
             loss_q = loss_fn(q, y_true)
@@ -94,7 +106,12 @@ class Agent(object):
 
         def actor_learn():
             pi = self.actor(s0)
-            q_pi = self.critic(s0, pi)
+            logits = F.log_softmax(pi, dim=1)
+            differentiable_pi = F.gumbel_softmax(logits, hard=True)
+            # 2021-12-07 Shawn: Add one-hot data to actor_learn to avoid local optima.
+            index = torch.argmax(pi, dim=1, keepdim=True)
+            pi_one_hot = torch.zeros_like(pi).scatter_(1, index, 1)  # [batch_size, a_dim]
+            q_pi = self.critic(s0, (differentiable_pi + pi_one_hot)/2)
 
             loss_pi = -torch.mean(q_pi)
 
@@ -114,7 +131,7 @@ class Agent(object):
         soft_update(self.actor_target, self.actor, self.tau)
 
 
-env = gym.make('Pendulum-v1')
+env = gym.make('CartPole-v0')
 # env.seed(0)
 # np.random.seed(0)
 # random.seed(0)
@@ -123,6 +140,9 @@ env = gym.make('Pendulum-v1')
 params = {
     'env': env,
     'gamma': 0.5,
+    'epsi_high': 0.9,
+    'epsi_low': 0.05,
+    'decay': 200,
     'actor_lr': 0.001,
     'critic_lr': 0.001,
     'tau': 0.02,
@@ -140,9 +160,10 @@ for episode in range(1000):
         env.render()
         a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
-        agent.buffer.store(s0, a0, r1, s1, done)  # Ensure all data stored are of type ndarray.
+        r2 = -1 * (abs(s1[0])/2.4 + abs(s1[2])/0.209)
+        agent.buffer.store(s0, a0, r2, s1, done)  # Ensure all data stored are of type ndarray.
 
-        eps_reward += r1
+        eps_reward += r2
         s0 = s1
 
         agent.learn()

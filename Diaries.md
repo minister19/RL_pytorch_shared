@@ -7,12 +7,14 @@
 ### 2021-12-01 Shawn: works on DDPG.
 
 - For Q-learning, remember output_activation should be Identity. Though you can process the value afterwards, do not introduce other activation function.
+- done should be considered and learned once.
 
 ### 2021-12-02 Shawn: works on DQN.
 
 - Please differentiate continuous actions and discrete actions. Usually agent act method should be updatd.
 - Use .detach() in to ignore gradient descent, improve efficiency.
-- Use .gather() to collect values along certain dimension with certain index.
+- Use .gather() to collect values from input along certain dimension with certain index. Return has the same shape with index.
+- Update both critic1 and critic2.
 
 ### 2021-12-02 Shawn: works on TD3.
 
@@ -27,8 +29,17 @@
 - For SAC, larger lr (learning rate) and smaller tau (target network update) seem better.
 - For SAC, init_wander is less usefull compared to TD3.
 
-### 2021-12-05 Shawn: works on SAC discrete.
+### 2021-12-05 Shawn: works on DDPG discrete.
 
 - .detach() is not applicable for wrapped functions that return tuple, thus perferring "with torch.no_grad():".
-- It seems gumbel_softmax is a candidate for SAC's distribution feature.
 - It seems for discrete problems, smaller gamma is good; while for continuous problems, largger gamma is good.
+
+### 2021-12-06 Shawn: works on DDPG discrete.
+
+- Use .scatter() to place src values by index to Tensor.
+
+### 2021-12-07 Shawn: works on DDPG discrete.
+
+- Use .gumbel_softmax(logits, hard=True) as candidate for .argmax() + .scatter(), i.e. one-hot encoding. Because .scatter() is not differentiable.
+- Add one-hot data to actor_learn to avoid local optima.
+- It seems for discrete problems, random action is good for exploration.

@@ -113,17 +113,16 @@ class Agent(object):
         d = torch.tensor(np.array(d), dtype=torch.float).view(self.batch_size, -1)  # [batch_size, 1]
 
         def critic_learn():
-            with torch.no_grad():
-                a2, logp_a2 = self.actor(s1)
-                logp_a2_v2 = logp_a2.view(self.batch_size, -1)
-
-                q1_pi_targ = self.critic1_target(s1, a2)
-                q2_pi_targ = self.critic2_target(s1, a2)
-                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-                y_true = r1 + self.gamma * (1 - d) * (q_pi_targ - self.alpha * logp_a2_v2)
-
             q1 = self.critic1(s0, a0)
             q2 = self.critic2(s0, a0)
+
+            with torch.no_grad():
+                a1, logp_a1 = self.actor(s1)
+                logp_a1_viewed = logp_a1.view(self.batch_size, -1)
+                q1_pi_targ = self.critic1_target(s1, a1)
+                q2_pi_targ = self.critic2_target(s1, a1)
+                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                y_true = r1 + self.gamma * (1 - d) * (q_pi_targ - self.alpha * logp_a1_viewed)
 
             # MSE loss against Bellman backup
             loss_fn = nn.MSELoss()
@@ -196,12 +195,11 @@ for episode in range(1000):
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)  # Ensure all data stored are of type ndarray.
 
+        eps_step += 1
         eps_reward += r1
         s0 = s1
 
         agent.learn(eps_step)
-
-        eps_step += 1
 
         if done:
             print(f'{episode+1}: {step+1} {eps_reward:.2f}')
@@ -209,5 +207,6 @@ for episode in range(1000):
 
 '''
 Reference:
-https://github.com/LxzGordon/Deep-Reinforcement-Learning-with-pytorch
+https://spinningup.openai.com/en/latest/algorithms/sac.html
+https://arxiv.org/pdf/1812.05905.pdf
 '''
