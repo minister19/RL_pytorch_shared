@@ -17,7 +17,7 @@ class Actor(nn.Module):
         self.net = mlp(net_sizes, True, nn.ReLU, nn.Tanh)
 
     def forward(self, s):
-        a = self.net(s)  # Tensor: [a_dim]
+        a = self.net(s)  # Tensor: [[a_dim]]
         return a
 
 
@@ -40,6 +40,7 @@ class Agent(object):
 
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.shape[0]
+        self.a_limit = self.env.action_space.high[0]
 
         hidden_sizes = [64, 64]
         self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
@@ -54,12 +55,19 @@ class Agent(object):
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         self.buffer = Buffer(self.capacity)
+        self.steps = 0
 
     def act(self, s0):
-        s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
-        with torch.no_grad():
-            a0 = self.actor(s0).squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
-        return a0
+        self.steps += 1
+        if self.steps < self.start_steps:
+            a0 = torch.randn(self.a_dim).unsqueeze(0) * self.a_limit
+        else:
+            s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
+            with torch.no_grad():
+                a0 = self.actor(s0)
+            a0 += torch.randn_like(a0) * self.a_limit * self.action_noise
+            a0 = torch.clip(a0, -self.a_limit, self.a_limit)
+        return a0.squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
 
     def learn(self):
         if len(self.buffer.memory) < self.batch_size:
@@ -120,6 +128,8 @@ env = gym.make('Pendulum-v1')
 
 params = {
     'env': env,
+    'start_steps': 1000,
+    'action_noise': 0.1,
     'gamma': 0.99,
     'actor_lr': 0.001,
     'critic_lr': 0.001,

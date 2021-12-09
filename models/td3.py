@@ -18,7 +18,7 @@ class Actor(nn.Module):
         self.net = mlp(net_sizes, True, nn.ReLU, nn.Tanh)
 
     def forward(self, s):
-        a = self.net(s)  # Tensor: [a_dim]
+        a = self.net(s)  # Tensor: [[a_dim]]
         return a
 
 
@@ -41,6 +41,7 @@ class Agent(object):
 
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.shape[0]
+        self.a_limit = self.env.action_space.high[0]
 
         hidden_sizes = [64, 64]
         self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
@@ -59,18 +60,21 @@ class Agent(object):
         self.critic2_target.load_state_dict(self.critic2.state_dict())
 
         self.buffer = Buffer(self.capacity)
+        self.steps = 0
 
-    def act(self, s0, eps_step):
-        if eps_step < self.init_wander:
-            a0 = random.uniform(-self.a_dim, self.a_dim)
-            a0 = np.array([a0])
+    def act(self, s0):
+        self.steps += 1
+        if self.steps < self.start_steps:
+            a0 = torch.randn(self.a_dim).unsqueeze(0) * self.a_limit
         else:
             s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
             with torch.no_grad():
-                a0 = self.actor(s0).squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
-        return a0
+                a0 = self.actor(s0)
+            a0 += torch.randn_like(a0) * self.a_limit * self.action_noise
+            a0 = torch.clip(a0, -self.a_limit, self.a_limit)
+        return a0.squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
 
-    def learn(self, eps_step):
+    def learn(self, epi_step):
         if len(self.buffer.memory) < self.batch_size:
             return
 
@@ -93,7 +97,7 @@ class Agent(object):
                 epsilon = torch.randn_like(a1) * self.target_noise
                 epsilon = torch.clamp(epsilon, -self.noise_clip, self.noise_clip)
                 a1_noise = a1 + epsilon
-                a1_noise = torch.clamp(a1_noise, -self.a_dim, self.a_dim)
+                a1_noise = torch.clamp(a1_noise, -self.a_limit, self.a_limit)
 
                 # Target Q-values
                 q1_pi_targ = self.critic1_target(s1, a1_noise)
@@ -115,10 +119,9 @@ class Agent(object):
 
         def actor_learn():
             pi = self.actor(s0)
-            # 2021-12-02 Shawn: Update both critic1 and critic2.
             q1_pi = self.critic1(s0, pi)
             q2_pi = self.critic2(s0, pi)
-            q_pi = torch.min(q1_pi, q2_pi)
+            q_pi = torch.max(q1_pi, q2_pi)
 
             loss_pi = -torch.mean(q_pi)
 
@@ -134,7 +137,7 @@ class Agent(object):
 
         critic_learn()
         # Delayed Policy Updates
-        if eps_step % self.policy_delay == 0:
+        if epi_step % self.policy_delay == 0:
             actor_learn()
             soft_update(self.critic1_target, self.critic1, self.tau)
             soft_update(self.critic2_target, self.critic2, self.tau)
@@ -149,10 +152,11 @@ env = gym.make('Pendulum-v1')
 
 params = {
     'env': env,
-    'target_noise': 0.1,
-    'noise_clip': 0.2,
+    'start_steps': 2000,
+    'action_noise': 0.1,
+    'target_noise': 0.2,
+    'noise_clip': 0.5,
     'policy_delay': 2,
-    'init_wander': 1000,
     'gamma': 0.99,
     'actor_lr': 0.001,
     'critic_lr': 0.001,
@@ -163,23 +167,20 @@ params = {
 
 agent = Agent(**params)
 
-eps_step = 0
-
 for episode in range(1000):
     s0 = env.reset()
     eps_reward = 0
 
     for step in range(500):
         env.render()
-        a0 = agent.act(s0, eps_step)
+        a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)
 
-        eps_step += 1
         eps_reward += r1
         s0 = s1
 
-        agent.learn(eps_step)
+        agent.learn(step)
 
         if done:
             print(f'{episode+1}: {step+1} {eps_reward:.2f}')

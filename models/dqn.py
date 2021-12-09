@@ -17,7 +17,7 @@ class Actor(nn.Module):
         self.net = mlp(net_sizes, True, nn.ReLU, nn.Identity)  # Q-learning
 
     def forward(self, s):
-        a = self.net(s)  # Tensor: [a_dim]
+        a = self.net(s)  # Tensor: [[a_dim]]
         return a
 
 
@@ -39,15 +39,15 @@ class Agent(object):
 
     def act(self, s0):
         self.steps += 1
-        epsi = self.epsi_low + (self.epsi_high-self.epsi_low) * (math.exp(-1.0 * self.steps/self.decay))
-        if random.random() < epsi:
+        epsilon = self.epsi_low + (self.epsi_high-self.epsi_low) * (math.exp(-1.0 * self.steps/self.decay))
+        if random.random() < epsilon:
             a0 = random.randrange(self.a_dim)
         else:
             s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)
             with torch.no_grad():
                 a0 = self.q_net(s0)
-            a0 = torch.argmax(a0).item()
-        return a0  # torch.long
+            a0 = torch.argmax(a0).item()  # torch.long
+        return a0
 
     def learn(self):
         if (len(self.buffer.memory)) < self.batch_size:
@@ -89,10 +89,10 @@ env = gym.make('CartPole-v0')
 
 params = {
     'env': env,
-    'gamma': 0.5,
     'epsi_high': 0.9,
     'epsi_low': 0.05,
     'decay': 200,
+    'gamma': 0.5,
     'lr': 0.001,
     'capacity': 10000,
     'batch_size': 64,

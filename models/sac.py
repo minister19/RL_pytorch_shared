@@ -70,6 +70,7 @@ class Agent(object):
 
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.shape[0]
+        self.a_limit = self.env.action_space.high[0]
 
         hidden_sizes = [64, 64]
         self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
@@ -88,19 +89,19 @@ class Agent(object):
         self.critic2_target.load_state_dict(self.critic2.state_dict())
 
         self.buffer = Buffer(self.capacity)
+        self.steps = 0
 
-    def act(self, s0, eps_step):
-        if eps_step < self.init_wander:
-            a0 = random.uniform(-self.a_dim, self.a_dim)
-            a0 = np.array([a0])
+    def act(self, s0):
+        self.steps += 1
+        if self.steps < self.start_steps:
+            a0 = torch.randn(self.a_dim).unsqueeze(0) * self.a_limit
         else:
             s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
             with torch.no_grad():
                 a0, _ = self.actor(s0, deterministic=False, with_logprob=False)
-                a0 = a0.squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
-        return a0
+        return a0.squeeze(0).numpy()  # Tensor -> ndarray: [a_dim]
 
-    def learn(self, eps_step):
+    def learn(self):
         if len(self.buffer.memory) < self.batch_size:
             return
 
@@ -144,7 +145,7 @@ class Agent(object):
             q_pi = torch.min(q1_pi, q2_pi)
 
             # Entropy-regularized policy loss
-            loss = torch.mean(self.alpha * logp_pi_v2 - q_pi)
+            loss = -torch.mean(q_pi - self.alpha * logp_pi_v2)
 
             self.actor_optim.zero_grad()
             loss.backward()
@@ -171,19 +172,17 @@ env = gym.make('Pendulum-v1')
 
 params = {
     'env': env,
-    'init_wander': 200,
+    'start_steps': 2000,
     'alpha': 0.2,
     'gamma': 0.99,
-    'actor_lr': 0.005,
-    'critic_lr': 0.005,
-    'tau': 0.01,
+    'actor_lr': 0.001,
+    'critic_lr': 0.001,
+    'tau': 0.02,
     'capacity': 10000,
     'batch_size': 64,
 }
 
 agent = Agent(**params)
-
-eps_step = 0
 
 for episode in range(1000):
     s0 = env.reset()
@@ -191,15 +190,14 @@ for episode in range(1000):
 
     for step in range(500):
         env.render()
-        a0 = agent.act(s0, eps_step)
+        a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)
 
-        eps_step += 1
         eps_reward += r1
         s0 = s1
 
-        agent.learn(eps_step)
+        agent.learn()
 
         if done:
             print(f'{episode+1}: {step+1} {eps_reward:.2f}')
