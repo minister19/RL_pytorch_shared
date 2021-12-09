@@ -17,7 +17,7 @@ class Actor(nn.Module):
         self.net = mlp(net_sizes, True, nn.ReLU, nn.Tanh)
 
     def forward(self, s):
-        a = self.net(s)  # Tensor: [a_dim]
+        a = self.net(s)  # Tensor: [[a_dim]]
         return a
 
 
@@ -41,7 +41,7 @@ class Agent(object):
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.n
 
-        hidden_sizes = [32, 32]
+        hidden_sizes = [16, 16]
         self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
         self.actor_target = Actor(self.s_dim, hidden_sizes, self.a_dim)
         self.critic = Critic(self.s_dim+self.a_dim, hidden_sizes)
@@ -86,10 +86,8 @@ class Agent(object):
 
             with torch.no_grad():
                 a1 = self.actor_target(s1)
-
                 a1_values, a1_indices = torch.max(a1, dim=1, keepdim=True)  # [batch_size, a_dim]
                 a1_one_hot = torch.zeros_like(a1).scatter_(1, a1_indices, 1)
-
                 q_pi_targ = self.critic_target(s1, a1_one_hot)
                 y_true = torch.zeros_like(q)
                 for i in range(self.batch_size):
@@ -138,10 +136,10 @@ env = gym.make('CartPole-v0')
 
 params = {
     'env': env,
-    'gamma': 0.5,
     'epsi_high': 0.9,
     'epsi_low': 0.05,
     'decay': 200,
+    'gamma': 0.5,
     'actor_lr': 0.001,
     'critic_lr': 0.001,
     'tau': 0.02,

@@ -2,7 +2,7 @@
 
 - torch.nn.Sequential is compatible with torch.optim.Adam, does not affect convergence arrival.
 - Actor Critic's critic output_dim===1 and output_activation===torch.nn.Identity, this is critical.
-- It seems for ddpg, continuous learn (batch gradient) is better than stepped learn.
+- It seems for DDPG, continuous learn (batch gradient) is better than stepped learn.
 
 ### 2021-12-01 Shawn: works on DDPG.
 
@@ -30,7 +30,7 @@
 ### 2021-12-05 Shawn: works on DDPG discrete.
 
 - .detach() is not applicable for wrapped functions that return tuple, thus perferring "with torch.no_grad():".
-- It seems for discrete problems, smaller gamma is good; while for continuous problems, largger gamma is good.
+- It seems for discrete models, smaller gamma is good; while for continuous models, largger gamma is good.
 
 ### 2021-12-06 Shawn: works on DDPG discrete.
 
@@ -41,7 +41,7 @@
 - Use .gumbel_softmax(logits, hard=True) as candidate for .argmax() + .scatter(). One-hot encoding is required, but .scatter() is undifferentiable.
 - For DDPG discrete, add one-hot data to .actor_learn() to avoid local optima if necessary.
 
-### 2021-12-09 Shawn: works on TD3 discrete.
+### 2021-12-09 Shawn: works on all models.
 
-- It seems for both continuous/discrete models, start_steps is good for exploration.
+- It seems for all models, either long start_steps or eps-decay-random-action is good for exploration.
 - DDPG, TD3, SAC exist local optima issue, even after long training. It seems long start_steps helps resolve this issue. Reducing network also helps resolve this issue.

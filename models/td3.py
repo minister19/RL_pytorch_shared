@@ -96,12 +96,12 @@ class Agent(object):
                 # Target policy smoothing
                 epsilon = torch.randn_like(a1) * self.target_noise
                 epsilon = torch.clamp(epsilon, -self.noise_clip, self.noise_clip)
-                a1_noise = a1 + epsilon
-                a1_noise = torch.clamp(a1_noise, -self.a_limit, self.a_limit)
+                a1 = a1 + epsilon
+                a1 = torch.clamp(a1, -self.a_limit, self.a_limit)
 
                 # Target Q-values
-                q1_pi_targ = self.critic1_target(s1, a1_noise)
-                q2_pi_targ = self.critic2_target(s1, a1_noise)
+                q1_pi_targ = self.critic1_target(s1, a1)
+                q2_pi_targ = self.critic2_target(s1, a1)
                 q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
                 y_true = r1 + self.gamma * (1 - d) * q_pi_targ
 
