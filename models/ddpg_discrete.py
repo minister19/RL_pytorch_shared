@@ -41,7 +41,7 @@ class Agent(object):
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.n
 
-        hidden_sizes = [16, 16]
+        hidden_sizes = [8, 8]
         self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
         self.actor_target = Actor(self.s_dim, hidden_sizes, self.a_dim)
         self.critic = Critic(self.s_dim+self.a_dim, hidden_sizes)
@@ -58,15 +58,14 @@ class Agent(object):
 
     def act(self, s0):
         self.steps += 1
-        epsi = self.epsi_low + (self.epsi_high-self.epsi_low) * (math.exp(-1.0 * self.steps/self.decay))
-        if random.random() < epsi:
-            a0 = random.randrange(self.a_dim)
+        if self.steps < self.start_steps:
+            a0 = torch.randint(self.a_dim, (1,))
         else:
             s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
             with torch.no_grad():
                 a0 = self.actor(s0)
-            a0 = torch.argmax(a0).item()
-        return a0
+            a0 = torch.argmax(a0)
+        return a0.item()
 
     def learn(self):
         if len(self.buffer.memory) < self.batch_size:
@@ -136,9 +135,8 @@ env = gym.make('CartPole-v0')
 
 params = {
     'env': env,
-    'epsi_high': 0.9,
-    'epsi_low': 0.05,
-    'decay': 200,
+    'step_render': False,
+    'start_steps': 1000,
     'gamma': 0.5,
     'actor_lr': 0.001,
     'critic_lr': 0.001,
@@ -149,24 +147,30 @@ params = {
 
 agent = Agent(**params)
 
+eps_reward_sum = 0
+
 for episode in range(1000):
     s0 = env.reset()
     eps_reward = 0
 
     for step in range(500):
-        env.render()
+        if agent.step_render:
+            env.render()
         a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
-        r2 = -1 * (abs(s1[0])/2.4 + abs(s1[2])/0.209)
-        agent.buffer.store(s0, a0, r2, s1, done)
+        r1 = -1 * (abs(s1[2])/0.209)
+        # r1 = -1 * (abs(s1[0])/2.4 + abs(s1[2])/0.209)
+        agent.buffer.store(s0, a0, r1, s1, done)
 
-        eps_reward += r2
+        eps_reward += r1
         s0 = s1
 
         agent.learn()
 
         if done:
-            print(f'{episode+1}: {step+1} {eps_reward:.2f}')
+            eps_reward_sum += eps_reward
+            eps_reward_avg = eps_reward_sum / (episode+1)
+            print(f'{episode+1}: {step+1} {eps_reward:.2f} {eps_reward_avg:.2f}')
             break
 
 '''

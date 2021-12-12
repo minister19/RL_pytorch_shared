@@ -128,6 +128,7 @@ env = gym.make('Pendulum-v1')
 
 params = {
     'env': env,
+    'step_render': False,
     'start_steps': 1000,
     'action_noise': 0.1,
     'gamma': 0.99,
@@ -140,12 +141,15 @@ params = {
 
 agent = Agent(**params)
 
+eps_reward_sum = 0
+
 for episode in range(1000):
     s0 = env.reset()
     eps_reward = 0
 
     for step in range(500):
-        env.render()
+        if agent.step_render:
+            env.render()
         a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)
@@ -156,7 +160,9 @@ for episode in range(1000):
         agent.learn()
 
         if done:
-            print(f'{episode+1}: {step+1} {eps_reward:.2f}')
+            eps_reward_sum += eps_reward
+            eps_reward_avg = eps_reward_sum / (episode+1)
+            print(f'{episode+1}: {step+1} {eps_reward:.2f} {eps_reward_avg:.2f}')
             break
 
 '''

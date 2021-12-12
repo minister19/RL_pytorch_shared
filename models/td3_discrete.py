@@ -8,47 +8,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.distributions.normal import Normal
 from core import mlp, Buffer
 
 
 class Actor(nn.Module):
-    def __init__(self, input_size, hidden_sizes, output_size, log_std_min=-2, log_std_max=2):
+    def __init__(self, input_size, hidden_sizes, output_size):
         super().__init__()
-        net_sizes = [input_size] + list(hidden_sizes)
-        self.net = mlp(net_sizes, True, nn.ReLU, nn.ReLU)
-        self.mu_layer = nn.Linear(hidden_sizes[-1], output_size)
-        self.log_std_layer = nn.Linear(hidden_sizes[-1], output_size)
-        self.LOG_STD_MIN = log_std_min
-        self.LOG_STD_MAX = log_std_max
+        net_sizes = [input_size] + list(hidden_sizes) + [output_size]
+        self.net = mlp(net_sizes, True, nn.ReLU, nn.Tanh)
 
-    def forward(self, obs, deterministic=False, with_logprob=True):
-        net_out = self.net(obs)
-        mu = self.mu_layer(net_out)
-        log_std = self.log_std_layer(net_out)
-        log_std = torch.clamp(log_std, self.LOG_STD_MIN, self.LOG_STD_MAX)
-        std = torch.exp(log_std)
-
-        # Pre-squash distribution and sample
-        pi_distribution = Normal(mu, std)
-        if deterministic:
-            # Only used for evaluating policy at test time.
-            pi_action = mu
-        else:
-            pi_action = pi_distribution.rsample()
-
-        if with_logprob:
-            # Compute logprob from Gaussian, and then apply correction for Tanh squashing.
-            # NOTE: The correction formula is a little bit magic. To get an understanding
-            # of where it comes from, check out the original SAC paper (arXiv 1801.01290)
-            # and look in appendix C. This is a more numerically-stable equivalent to Eq 21.
-            # Try deriving it yourself as a (very difficult) exercise. :)
-            logp_pi = pi_distribution.log_prob(pi_action).sum(axis=-1)
-            logp_pi -= (2*(np.log(2) - pi_action - F.softplus(-2*pi_action))).sum(axis=1)
-        else:
-            logp_pi = None
-
-        return pi_action, logp_pi
+    def forward(self, s):
+        a = self.net(s)  # Tensor: [[a_dim]]
+        return a
 
 
 class Critic(nn.Module):
@@ -72,8 +43,8 @@ class Agent(object):
         self.a_dim = self.env.action_space.n
 
         hidden_sizes = [8, 8]
-        self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim, -2*self.a_dim, 2*self.a_dim)
-        self.actor_target = Actor(self.s_dim, hidden_sizes, self.a_dim, -2*self.a_dim, 2*self.a_dim)
+        self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
+        self.actor_target = Actor(self.s_dim, hidden_sizes, self.a_dim)
         self.critic1 = Critic(self.s_dim+self.a_dim, hidden_sizes)
         self.critic1_target = Critic(self.s_dim+self.a_dim, hidden_sizes)
         self.critic2 = Critic(self.s_dim+self.a_dim, hidden_sizes)
@@ -97,7 +68,7 @@ class Agent(object):
         else:
             s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)  # Tensor: [1, s_dim]
             with torch.no_grad():
-                a0, _ = self.actor(s0, deterministic=False, with_logprob=False)
+                a0 = self.actor(s0)
             a0 = torch.argmax(a0)
         return a0.item()
 
@@ -119,16 +90,24 @@ class Agent(object):
             q2 = self.critic2(s0, a0_one_hot)
 
             with torch.no_grad():
-                a1, logp_a1 = self.actor(s1)
+                a1 = self.actor_target(s1)
+                # Target policy smoothing disabled
                 a1_values, a1_indices = torch.max(a1, dim=1, keepdim=True)  # [batch_size, a_dim]
                 a1_one_hot = torch.zeros_like(a1).scatter_(1, a1_indices, 1)
-                logp_a1_viewed = logp_a1.view(self.batch_size, -1)
+
+                # Target Q-values
                 q1_pi_targ = self.critic1_target(s1, a1_one_hot)
                 q2_pi_targ = self.critic2_target(s1, a1_one_hot)
-                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                # v1: best critic
+                # q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                # v2: random critic
+                if random.randint(0, 1) == 0:
+                    q_pi_targ = q1_pi_targ
+                else:
+                    q_pi_targ = q2_pi_targ
                 y_true = torch.zeros_like(q1)
                 for i in range(self.batch_size):
-                    y_true[i] = r1[i] + self.gamma * (1-d[i]) * (q_pi_targ[i] - self.alpha * logp_a1_viewed[i])
+                    y_true[i] = r1[i] + self.gamma * (1-d[i]) * q_pi_targ[i]
 
             # MSE loss against Bellman backup
             loss_fn = nn.MSELoss()
@@ -143,21 +122,22 @@ class Agent(object):
             self.critic_optim.step()
 
         def actor_learn():
-            pi, logp_pi = self.actor(s0)
-            logp_pi_viewed = logp_pi.view(self.batch_size, -1)
+            pi = self.actor(s0)
             logits = F.log_softmax(pi, dim=1)
             differentiable_pi = F.gumbel_softmax(logits, hard=True)
             index = torch.argmax(pi, dim=1, keepdim=True)
             pi_one_hot = torch.zeros_like(pi).scatter_(1, index, 1)  # [batch_size, a_dim]
-            q1_pi = self.critic1(s0, differentiable_pi)
-            q2_pi = self.critic2(s0, differentiable_pi)
+            q1_pi = self.critic1(s0, (differentiable_pi + pi_one_hot)/2)
+            q2_pi = self.critic2(s0, (differentiable_pi + pi_one_hot)/2)
+            # v1: always critic1
+            # q_pi = q1_pi
+            # v2: best critic
             q_pi = torch.min(q1_pi, q2_pi)
 
-            # Entropy-regularized policy loss
-            loss = torch.mean(self.alpha * logp_pi_viewed - q_pi)
+            loss_pi = -torch.mean(q_pi)
 
             self.actor_optim.zero_grad()
-            loss.backward()
+            loss_pi.backward()
             for param in self.actor.parameters():
                 param.grad.data.clamp_(-1, 1)
             self.actor_optim.step()
@@ -167,6 +147,7 @@ class Agent(object):
                 target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
         critic_learn()
+        # Delayed Policy Updates disabled
         actor_learn()
         soft_update(self.critic1_target, self.critic1, self.tau)
         soft_update(self.critic2_target, self.critic2, self.tau)
@@ -181,10 +162,9 @@ env = gym.make('CartPole-v0')
 
 params = {
     'env': env,
-    'step_render': True,
+    'step_render': False,
     'start_steps': 1000,
-    'alpha': 0.2,
-    'gamma': 0.99,
+    'gamma': 0.5,
     'actor_lr': 0.001,
     'critic_lr': 0.001,
     'tau': 0.02,
@@ -222,6 +202,5 @@ for episode in range(1000):
 
 '''
 Reference:
-https://spinningup.openai.com/en/latest/algorithms/sac.html
-https://arxiv.org/pdf/1812.05905.pdf
+https://spinningup.openai.com/en/latest/algorithms/td3.html
 '''

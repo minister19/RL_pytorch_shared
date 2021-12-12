@@ -94,3 +94,5 @@ x = torch.argmax(logits, dim=1, keepdim=True)
 print(x)
 
 # %%
+x = random.randint(0, 1)
+print(x)

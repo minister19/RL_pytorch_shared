@@ -139,13 +139,13 @@ class Agent(object):
 
         def actor_learn():
             pi, logp_pi = self.actor(s0)
-            logp_pi_v2 = logp_pi.view(self.batch_size, -1)
+            logp_pi_viewed = logp_pi.view(self.batch_size, -1)
             q1_pi = self.critic1(s0, pi)
             q2_pi = self.critic2(s0, pi)
             q_pi = torch.min(q1_pi, q2_pi)
 
             # Entropy-regularized policy loss
-            loss = -torch.mean(q_pi - self.alpha * logp_pi_v2)
+            loss = torch.mean(self.alpha * logp_pi_viewed - q_pi)
 
             self.actor_optim.zero_grad()
             loss.backward()
@@ -172,7 +172,8 @@ env = gym.make('Pendulum-v1')
 
 params = {
     'env': env,
-    'start_steps': 2000,
+    'step_render': False,
+    'start_steps': 1000,
     'alpha': 0.2,
     'gamma': 0.99,
     'actor_lr': 0.001,
@@ -184,12 +185,15 @@ params = {
 
 agent = Agent(**params)
 
+eps_reward_sum = 0
+
 for episode in range(1000):
     s0 = env.reset()
     eps_reward = 0
 
     for step in range(500):
-        env.render()
+        if agent.step_render:
+            env.render()
         a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)
@@ -200,7 +204,9 @@ for episode in range(1000):
         agent.learn()
 
         if done:
-            print(f'{episode+1}: {step+1} {eps_reward:.2f}')
+            eps_reward_sum += eps_reward
+            eps_reward_avg = eps_reward_sum / (episode+1)
+            print(f'{episode+1}: {step+1} {eps_reward:.2f} {eps_reward_avg:.2f}')
             break
 
 '''

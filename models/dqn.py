@@ -41,13 +41,13 @@ class Agent(object):
         self.steps += 1
         epsilon = self.epsi_low + (self.epsi_high-self.epsi_low) * (math.exp(-1.0 * self.steps/self.decay))
         if random.random() < epsilon:
-            a0 = random.randrange(self.a_dim)
+            a0 = torch.randint(self.a_dim, (1,))
         else:
             s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)
             with torch.no_grad():
                 a0 = self.q_net(s0)
-            a0 = torch.argmax(a0).item()  # torch.long
-        return a0
+            a0 = torch.argmax(a0)
+        return a0.item()
 
     def learn(self):
         if (len(self.buffer.memory)) < self.batch_size:
@@ -89,6 +89,7 @@ env = gym.make('CartPole-v0')
 
 params = {
     'env': env,
+    'step_render': False,
     'epsi_high': 0.9,
     'epsi_low': 0.05,
     'decay': 200,
@@ -106,11 +107,13 @@ for episode in range(1000):
     eps_reward = 0
 
     for step in range(500):
-        env.render()
+        if agent.step_render:
+            env.render()
         a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
         # 2021-12-02 Shawn: redefine reward for better control target and convergence.
-        r1 = -1 * (abs(s1[0])/2.4 + abs(s1[2])/0.209)
+        r1 = -1 * (abs(s1[2])/0.209)
+        # r1 = -1 * (abs(s1[0])/2.4 + abs(s1[2])/0.209)
         agent.buffer.store(s0, a0, r1, s1, done)
 
         eps_reward += r1

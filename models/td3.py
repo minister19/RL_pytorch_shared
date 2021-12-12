@@ -102,7 +102,13 @@ class Agent(object):
                 # Target Q-values
                 q1_pi_targ = self.critic1_target(s1, a1)
                 q2_pi_targ = self.critic2_target(s1, a1)
-                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                # v1: best critic
+                # q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                # v2: random critic
+                if random.randint(0, 1) == 0:
+                    q_pi_targ = q1_pi_targ
+                else:
+                    q_pi_targ = q2_pi_targ
                 y_true = r1 + self.gamma * (1 - d) * q_pi_targ
 
             # MSE loss against Bellman backup
@@ -121,7 +127,10 @@ class Agent(object):
             pi = self.actor(s0)
             q1_pi = self.critic1(s0, pi)
             q2_pi = self.critic2(s0, pi)
-            q_pi = torch.max(q1_pi, q2_pi)
+            # v1: always critic1
+            # q_pi = q1_pi
+            # v2: best critic
+            q_pi = torch.min(q1_pi, q2_pi)
 
             loss_pi = -torch.mean(q_pi)
 
@@ -152,7 +161,8 @@ env = gym.make('Pendulum-v1')
 
 params = {
     'env': env,
-    'start_steps': 2000,
+    'step_render': False,
+    'start_steps': 1000,
     'action_noise': 0.1,
     'target_noise': 0.2,
     'noise_clip': 0.5,
@@ -167,12 +177,15 @@ params = {
 
 agent = Agent(**params)
 
+eps_reward_sum = 0
+
 for episode in range(1000):
     s0 = env.reset()
     eps_reward = 0
 
     for step in range(500):
-        env.render()
+        if agent.step_render:
+            env.render()
         a0 = agent.act(s0)
         s1, r1, done, _ = env.step(a0)
         agent.buffer.store(s0, a0, r1, s1, done)
@@ -183,7 +196,9 @@ for episode in range(1000):
         agent.learn(step)
 
         if done:
-            print(f'{episode+1}: {step+1} {eps_reward:.2f}')
+            eps_reward_sum += eps_reward
+            eps_reward_avg = eps_reward_sum / (episode+1)
+            print(f'{episode+1}: {step+1} {eps_reward:.2f} {eps_reward_avg:.2f}')
             break
 
 '''
