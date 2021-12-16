@@ -30,7 +30,7 @@
 ### 2021-12-05 Shawn: works on DDPG discrete.
 
 - .detach() is not applicable for wrapped functions that return tuple, thus perferring "with torch.no_grad():".
-- It seems for DDPG/TD3 discrete models, smaller gamma is good; for SAC discrete, larger gamma is good.
+- It seems for DDPG/TD3 discrete, smaller gamma is good; for SAC discrete, larger gamma is good.
 
 ### 2021-12-06 Shawn: works on DDPG discrete.
 
@@ -51,3 +51,13 @@
 
 - python render functions are power-consuming, disable if necessary.
 - For TD3, .critic_learn() by random critic, .actor_learn() by best critic, to achieve better control target, and to avoid local optima.
+
+### 2021-12-15 Shawn: works on A2C.
+
+- It seems for A2C, larger gamma is good, and larger lr is good for faster convergence.
+- policy-based model (A2C) and value-based model (DQN) can cross evaluate.
+
+### 2021-12-16 Shawn: works on A2C.
+
+- It seems for A2C, positive reward is better. And larger lr at beginning and smaller lr afterwards is best.
+- For A2C, larger entropy leads to exploration/oscillation.

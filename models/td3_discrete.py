@@ -154,7 +154,7 @@ class Agent(object):
         soft_update(self.actor_target, self.actor, self.tau)
 
 
-env = gym.make('CartPole-v0')
+env = gym.make('CartPole-v1')
 # env.seed(0)
 # np.random.seed(0)
 # random.seed(0)

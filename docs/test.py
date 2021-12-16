@@ -1,4 +1,5 @@
 # %%
+from torch.distributions import Categorical
 import random
 import itertools
 import numpy as np
@@ -96,3 +97,13 @@ print(x)
 # %%
 x = random.randint(0, 1)
 print(x)
+
+# %%
+p = np.array([0.1, 0.2, 0.4, 0.3])
+logp = np.log(p)
+entropy1 = np.sum(-p*logp)
+print(entropy1)
+
+p_tensor = torch.Tensor([0.1, 0.2, 0.4, 0.3])
+entropy2 = Categorical(probs=p_tensor).entropy()
+print(entropy2)

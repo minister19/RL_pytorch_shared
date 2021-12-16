@@ -29,7 +29,7 @@ class Agent(object):
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.n
 
-        hidden_sizes = [64, 64]
+        hidden_sizes = [8, 8]
         self.q_net = Actor(self.s_dim, hidden_sizes, self.a_dim)
 
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.lr)
@@ -81,7 +81,7 @@ class Agent(object):
         q_net_learn()
 
 
-env = gym.make('CartPole-v0')
+env = gym.make('CartPole-v1')
 # env.seed(0)
 # np.random.seed(0)
 # random.seed(0)

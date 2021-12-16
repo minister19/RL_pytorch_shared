@@ -25,7 +25,7 @@ pip install pyglet
 
 # Classic Envs
 
-## 'CartPole-v0'
+## 'CartPole-v1'
 
 ```
 Observation:

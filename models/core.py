@@ -38,3 +38,7 @@ class Buffer():
         else:
             self.memory[self.position] = transition
         self.position = (self.position + 1) % self.capacity
+
+    def clear(self):
+        self.memory.clear()
+        self.position = 0
