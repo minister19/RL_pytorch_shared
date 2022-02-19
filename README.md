@@ -40,10 +40,9 @@ _Not explained on Github._
 ```
 pip install -U autopep8
 pip install numpy
-pip install gym
+pip install gym pygame pyglet
 pip3 install torch torchvision torchaudio
 pip install matplotlib
-pip install pyglet
 ```
 
 # TODO
@@ -117,3 +116,7 @@ pip install pyglet
 
 - It seems for A2C, positive reward is better. And larger lr at beginning and smaller lr afterwards is best.
 - For A2C, larger entropy leads to exploration/oscillation.
+
+### 2022-02-19 Shawn: works on all models.
+
+- store all tensors, including a0 one hot for discrete models, for faster training.

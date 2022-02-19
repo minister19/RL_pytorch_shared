@@ -1,5 +1,10 @@
 import numpy as np
+import torch
 import torch.nn as nn
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# 2022-01-26 Shawn: for RL with simple mlp, pure CPU is faster.
+device = torch.device("cpu")
 
 
 def combined_shape(length, shape=None):
@@ -27,7 +32,7 @@ def count_vars(module):
 
 
 class Buffer():
-    def __init__(self, capacity):
+    def __init__(self, capacity) -> None:
         self.capacity = capacity
         self.memory = []
         self.position = 0
@@ -42,3 +47,20 @@ class Buffer():
     def clear(self):
         self.memory.clear()
         self.position = 0
+
+
+class Benchmark():
+    def __init__(self) -> None:
+        self.sum = 0
+        self.__count = 0
+        self.avg = 0
+
+    def plus(self, value):
+        self.sum += value
+        self.__count += 1
+        self.avg = self.sum / self.__count
+
+    def clear(self):
+        self.sum = 0
+        self.__count = 0
+        self.avg = 0

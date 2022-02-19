@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from core import mlp, Buffer
+from core import device, mlp, Buffer, Benchmark
 
 
 class Actor(nn.Module):
@@ -16,6 +16,7 @@ class Actor(nn.Module):
         super().__init__()
         net_sizes = [input_size] + list(hidden_sizes) + [output_size]
         self.net = mlp(net_sizes, True, nn.ReLU, nn.Tanh)
+        self.to(device)
 
     def forward(self, s):
         a = self.net(s)  # Tensor: [[a_dim]]
@@ -27,6 +28,7 @@ class Critic(nn.Module):
         super().__init__()
         net_sizes = [input_size] + list(hidden_sizes) + [1]
         self.net = mlp(net_sizes, True, nn.ReLU, nn.Identity)  # Q-learning
+        self.to(device)
 
     def forward(self, s):
         v = self.net(s)
@@ -41,9 +43,8 @@ class Agent(object):
         self.s_dim = self.env.observation_space.shape[0]
         self.a_dim = self.env.action_space.n
 
-        hidden_sizes = [8, 8]
-        self.actor = Actor(self.s_dim, hidden_sizes, self.a_dim)
-        self.critic = Critic(self.s_dim, hidden_sizes)
+        self.actor = Actor(self.s_dim, self.hidden_sizes, self.a_dim)
+        self.critic = Critic(self.s_dim, self.hidden_sizes)
 
         self.params = itertools.chain(self.actor.parameters(), self.critic.parameters())
         self.optim = optim.Adam(self.params, lr=self.lr)
@@ -52,7 +53,7 @@ class Agent(object):
         self.entropy = 0
 
     def act(self, s0):
-        s0 = torch.tensor(s0, dtype=torch.float).unsqueeze(0)
+        s0 = torch.tensor(s0, dtype=torch.float, device=device).unsqueeze(0)
         probs = self.actor(s0)
         probs = torch.softmax(probs, dim=1)
         dist = torch.distributions.Categorical(probs=probs)
@@ -65,7 +66,7 @@ class Agent(object):
         return a0.item(), log_prob, v_current
 
     def learn(self, s1):
-        s1 = torch.tensor(s1, dtype=torch.float).unsqueeze(0)
+        s1 = torch.tensor(s1, dtype=torch.float, device=device).unsqueeze(0)
         with torch.no_grad():
             v_next = self.critic(s1)
 
@@ -98,53 +99,54 @@ class Agent(object):
         advantage_learn()
 
 
-env = gym.make('CartPole-v1')
-# env.seed(0)
-# np.random.seed(0)
-# random.seed(0)
-# torch.manual_seed(0)
+if __name__ == '__main__':
+    env = gym.make('CartPole-v1')
+    env_test = None
+    # env.seed(0)
+    # np.random.seed(0)
+    # random.seed(0)
+    # torch.manual_seed(0)
+    params = {
+        'env': env,
+        'env_test': env_test,
+        'step_render': False,
+        'hidden_sizes': [8, 8],
+        'enable_entropy': True,
+        'alpha': 0.001,
+        'gamma': 0.999,
+        'lr': 0.005,
+        'max_steps': 500,
+        'capacity': 1000,
+    }
 
-params = {
-    'env': env,
-    'step_render': False,
-    'enable_entropy': True,
-    'alpha': 0.001,
-    'gamma': 0.999,
-    'lr': 0.005,
-    'max_steps': 500,
-    'capacity': 1000,
-}
+    agent = Agent(**params)
+    train_score = Benchmark()
 
-agent = Agent(**params)
+    for episode in range(10000):
+        s0 = env.reset()
+        eps_reward = 0
 
-eps_reward_sum = 0
+        for step in range(1000):
+            if agent.step_render:
+                env.render()
+            a0, log_prob, v_current = agent.act(s0)
+            s1, r1, done, _ = env.step(a0)
+            r1 = 1-1 * (abs(s1[2])/0.209)
+            # r1 = 2-1 * (abs(s1[0])/2.4 + abs(s1[2])/0.209)
+            agent.buffer.store(log_prob, v_current, r1, done)
 
-for episode in range(10000):
-    s0 = env.reset()
-    eps_reward = 0
+            s0 = s1
+            eps_reward += r1
 
-    for step in range(1000):
-        if agent.step_render:
-            env.render()
-        a0, log_prob, v_current = agent.act(s0)
-        s1, r1, done, _ = env.step(a0)
-        r1 = 1-1 * (abs(s1[2])/0.209)
-        # r1 = 2-1 * (abs(s1[0])/2.4 + abs(s1[2])/0.209)
-        agent.buffer.store(log_prob, v_current, r1, done)
+            if done or ((step+1) % agent.max_steps == 0):
+                agent.learn(s1)
+                agent.buffer.clear()
+                agent.entropy = 0
 
-        eps_reward += r1
-        s0 = s1
-
-        if done or ((step+1) % agent.max_steps == 0):
-            agent.learn(s1)
-            agent.buffer.clear()
-            agent.entropy = 0
-
-        if done:
-            eps_reward_sum += eps_reward
-            eps_reward_avg = eps_reward_sum / (episode+1)
-            print(f'{episode+1}: {step+1} {eps_reward:.2f} {eps_reward_avg:.2f}')
-            break
+            if done:
+                train_score.plus(eps_reward)
+                print(f'{episode+1}: {step+1} {eps_reward:.2f} {train_score.avg:.2f}')
+                break
 
 '''
 Reference: 
